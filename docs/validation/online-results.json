@@ -1,4 +1,65 @@
 {
-  "status": "pending",
-  "url": "https://talentjay-ux.github.io/nail-tryon/"
+  "status": "passed",
+  "url": "https://talentjay-ux.github.io/nail-tryon/",
+  "verifiedAt": "2026-10-20T03:52:23.842Z",
+  "implementationCommit": "c525270f6f28093f099c79541f35c10d779cb8d3",
+  "physicalIPhoneTested": false,
+  "engines": {
+    "chromium": {
+      "http": 200,
+      "htmlSha256": "05e8573309fd7c17cc11305499a7847bd347a2ef32c4b1be1cc708bd3af4a7f7",
+      "viewport": "iPhone 13 emulation on Linux desktop",
+      "readyMs": 4454,
+      "withFingerLabelsMs": 6073,
+      "nails": 8,
+      "hands": 0,
+      "status": "8 片指甲 · 8 片按全部设置",
+      "error": null,
+      "export": "passed",
+      "uncaughtErrors": []
+    },
+    "webkit": {
+      "http": 200,
+      "htmlSha256": "05e8573309fd7c17cc11305499a7847bd347a2ef32c4b1be1cc708bd3af4a7f7",
+      "viewport": "iPhone 13 emulation on Linux desktop",
+      "readyMs": 2521,
+      "withFingerLabelsMs": 3627,
+      "nails": 8,
+      "hands": 0,
+      "status": "8 片指甲 · 8 片按全部设置",
+      "error": null,
+      "export": "passed",
+      "uncaughtErrors": []
+    }
+  },
+  "assets": {
+    "models/nails-int8.onnx": {
+      "bytes": 12374423,
+      "sha256": "27ad00b46b2a57c3011dfda0bd325b88c4358d47a7a6d92d55cfe1e24f15f60b",
+      "matches_local": true,
+      "content_type": "application/octet-stream",
+      "content_encoding": null
+    },
+    "runtime/ort.wasm.min.js": {
+      "bytes": 46436,
+      "sha256": "98e831517582c08fc1b729def487a8b0152c83fc641746137eb4c7ad46032f1c",
+      "matches_local": true,
+      "content_type": "application/javascript; charset=utf-8",
+      "content_encoding": null
+    },
+    "runtime/ort-wasm-simd-threaded.mjs": {
+      "bytes": 24503,
+      "sha256": "d870a377322c3053fb97432d548423f165dd15e2af232947592fc07b0d2f3639",
+      "matches_local": true,
+      "content_type": "text/javascript; charset=utf-8",
+      "content_encoding": null
+    },
+    "runtime/ort-wasm-simd-threaded.wasm": {
+      "bytes": 11018731,
+      "sha256": "1bf0b9ed7ad025cf9ca88ce6da29e54df3f128a169f8241d71823e81f078d578",
+      "matches_local": true,
+      "content_type": "application/wasm",
+      "content_encoding": null
+    }
+  }
 }

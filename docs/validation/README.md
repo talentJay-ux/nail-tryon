@@ -60,3 +60,9 @@
 - 本地无网络限速的整套测试，冷加载约数秒，后续每图约 2～3 秒；结果详见引擎 JSON。模型使用 Cache Storage 版本缓存并校验 SHA-256；缓存失败不阻止运行。
 
 真实 iPhone 的下载、算力与内存还需设备验证；不能把桌面 WebKit 数字当作真机耗时。线上发布后的页面、模型资源及实际推理核验结果见 [线上验证](online-results.json)。
+
+## 线上发布核验
+
+已从正式 HTTPS 地址验证 Chromium 和 WebKit 的真实模型加载、8 片握杯甲检出及设计单导出，均无未捕获 JS 错误。线上 HTML、ONNX、运行库 JS / MJS / WASM 的 SHA-256 与本地逐一一致；WASM 以 `application/wasm` 提供。
+
+[线上 Chromium 截图](online-chromium-cup.png) · [线上 WebKit 截图](online-webkit-cup.png) · [线上核验记录](online-results.json)。核验对应实现提交 `c525270`；后续提交仅补充验证文档和截图，网页与模型字节未变。
