@@ -1,0 +1,298 @@
+{
+  "definition": "IoU vs FP32 output at confidence .30; not annotated ground truth",
+  "models": {
+    "nails-fp32": {
+      "bytes": 47375205
+    },
+    "nails-dynamic-int8": {
+      "bytes": 12374423
+    },
+    "nails-fp16": {
+      "bytes": 23749925
+    },
+    "nails-weight-int8": {
+      "bytes": 12328696
+    }
+  },
+  "photos": {
+    "almond-long": {
+      "nails-fp32": {
+        "nails": 5,
+        "ms_cpu": 224,
+        "scores": [
+          0.9007,
+          0.8961,
+          0.8893,
+          0.8783,
+          0.845
+        ]
+      },
+      "nails-dynamic-int8": {
+        "nails": 5,
+        "ms_cpu": 184,
+        "scores": [
+          0.8928,
+          0.8863,
+          0.8828,
+          0.8769,
+          0.8022
+        ],
+        "mask_iou_mean": 0.9868845315904139,
+        "mask_iou_min": 0.9529411764705882,
+        "matched_over_0_5": 5
+      },
+      "nails-fp16": {
+        "nails": 5,
+        "ms_cpu": 250,
+        "scores": [
+          0.9007,
+          0.8961,
+          0.8893,
+          0.8783,
+          0.845
+        ],
+        "mask_iou_mean": 1.0,
+        "mask_iou_min": 1.0,
+        "matched_over_0_5": 5
+      },
+      "nails-weight-int8": {
+        "nails": 5,
+        "ms_cpu": 294,
+        "scores": [
+          0.9041,
+          0.9001,
+          0.8951,
+          0.8831,
+          0.8509
+        ],
+        "mask_iou_mean": 0.9913483663138518,
+        "mask_iou_min": 0.975609756097561,
+        "matched_over_0_5": 5
+      }
+    },
+    "crossed": {
+      "nails-fp32": {
+        "nails": 2,
+        "ms_cpu": 310,
+        "scores": [
+          0.8486,
+          0.7466
+        ]
+      },
+      "nails-dynamic-int8": {
+        "nails": 2,
+        "ms_cpu": 190,
+        "scores": [
+          0.8693,
+          0.7354
+        ],
+        "mask_iou_mean": 0.9583333333333333,
+        "mask_iou_min": 0.9166666666666666,
+        "matched_over_0_5": 2
+      },
+      "nails-fp16": {
+        "nails": 2,
+        "ms_cpu": 297,
+        "scores": [
+          0.8486,
+          0.7462
+        ],
+        "mask_iou_mean": 1.0,
+        "mask_iou_min": 1.0,
+        "matched_over_0_5": 2
+      },
+      "nails-weight-int8": {
+        "nails": 2,
+        "ms_cpu": 309,
+        "scores": [
+          0.8528,
+          0.7442
+        ],
+        "mask_iou_mean": 1.0,
+        "mask_iou_min": 1.0,
+        "matched_over_0_5": 2
+      }
+    },
+    "cup": {
+      "nails-fp32": {
+        "nails": 8,
+        "ms_cpu": 300,
+        "scores": [
+          0.9107,
+          0.8951,
+          0.889,
+          0.8871,
+          0.8848,
+          0.8785,
+          0.8621,
+          0.8253
+        ]
+      },
+      "nails-dynamic-int8": {
+        "nails": 8,
+        "ms_cpu": 171,
+        "scores": [
+          0.8808,
+          0.8759,
+          0.8468,
+          0.8409,
+          0.8393,
+          0.8337,
+          0.8134,
+          0.6619
+        ],
+        "mask_iou_mean": 0.9939827127659575,
+        "mask_iou_min": 0.9625,
+        "matched_over_0_5": 8
+      },
+      "nails-fp16": {
+        "nails": 8,
+        "ms_cpu": 286,
+        "scores": [
+          0.9107,
+          0.895,
+          0.8889,
+          0.8871,
+          0.8848,
+          0.8785,
+          0.8621,
+          0.8252
+        ],
+        "mask_iou_mean": 1.0,
+        "mask_iou_min": 1.0,
+        "matched_over_0_5": 8
+      },
+      "nails-weight-int8": {
+        "nails": 8,
+        "ms_cpu": 314,
+        "scores": [
+          0.9137,
+          0.8988,
+          0.8969,
+          0.8911,
+          0.8885,
+          0.8827,
+          0.8673,
+          0.834
+        ],
+        "mask_iou_mean": 0.9770910322739591,
+        "mask_iou_min": 0.926829268292683,
+        "matched_over_0_5": 8
+      }
+    },
+    "long-nails": {
+      "nails-fp32": {
+        "nails": 5,
+        "ms_cpu": 300,
+        "scores": [
+          0.917,
+          0.9156,
+          0.9014,
+          0.8967,
+          0.8932
+        ]
+      },
+      "nails-dynamic-int8": {
+        "nails": 5,
+        "ms_cpu": 191,
+        "scores": [
+          0.914,
+          0.9138,
+          0.9134,
+          0.8924,
+          0.8735
+        ],
+        "mask_iou_mean": 0.9768852459016394,
+        "mask_iou_min": 0.9344262295081968,
+        "matched_over_0_5": 5
+      },
+      "nails-fp16": {
+        "nails": 5,
+        "ms_cpu": 274,
+        "scores": [
+          0.917,
+          0.9156,
+          0.9014,
+          0.8967,
+          0.8932
+        ],
+        "mask_iou_mean": 1.0,
+        "mask_iou_min": 1.0,
+        "matched_over_0_5": 5
+      },
+      "nails-weight-int8": {
+        "nails": 5,
+        "ms_cpu": 256,
+        "scores": [
+          0.9198,
+          0.9187,
+          0.9037,
+          0.8995,
+          0.8959
+        ],
+        "mask_iou_mean": 0.9922077922077921,
+        "mask_iou_min": 0.961038961038961,
+        "matched_over_0_5": 5
+      }
+    },
+    "two-hands": {
+      "nails-fp32": {
+        "nails": 6,
+        "ms_cpu": 295,
+        "scores": [
+          0.8735,
+          0.8679,
+          0.8644,
+          0.8456,
+          0.8001,
+          0.5652
+        ]
+      },
+      "nails-dynamic-int8": {
+        "nails": 6,
+        "ms_cpu": 197,
+        "scores": [
+          0.8621,
+          0.8442,
+          0.837,
+          0.8314,
+          0.8018,
+          0.5584
+        ],
+        "mask_iou_mean": 0.9697273073989322,
+        "mask_iou_min": 0.875,
+        "matched_over_0_5": 6
+      },
+      "nails-fp16": {
+        "nails": 6,
+        "ms_cpu": 290,
+        "scores": [
+          0.8735,
+          0.8678,
+          0.8643,
+          0.8454,
+          0.7999,
+          0.5639
+        ],
+        "mask_iou_mean": 1.0,
+        "mask_iou_min": 1.0,
+        "matched_over_0_5": 6
+      },
+      "nails-weight-int8": {
+        "nails": 6,
+        "ms_cpu": 303,
+        "scores": [
+          0.8787,
+          0.8709,
+          0.8672,
+          0.8518,
+          0.8064,
+          0.5734
+        ],
+        "mask_iou_mean": 0.9633091787439615,
+        "mask_iou_min": 0.9066666666666666,
+        "matched_over_0_5": 6
+      }
+    }
+  }
+}

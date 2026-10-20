@@ -1,0 +1,22 @@
+{
+  "cup": {
+    "hands": 0,
+    "nails": 0,
+    "status": "\u6ca1\u8bc6\u522b\u5230\u624b\uff1a\u6362\u4e00\u5f20\u624b\u80cc\u671d\u955c\u5934\u3001\u6307\u7532\u6e05\u695a\u7684\u7167\u7247"
+  },
+  "two-hands": {
+    "hands": 1,
+    "nails": 5,
+    "status": "\u8bc6\u522b\u5230 1 \u53ea\u624b"
+  },
+  "almond-long": {
+    "hands": 1,
+    "nails": 5,
+    "status": "\u8bc6\u522b\u5230 1 \u53ea\u624b"
+  },
+  "crossed": {
+    "hands": 2,
+    "nails": 10,
+    "status": "\u8bc6\u522b\u5230 2 \u53ea\u624b"
+  }
+}

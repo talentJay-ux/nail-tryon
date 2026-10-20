@@ -1,0 +1,59 @@
+{
+  "engine": "chromium",
+  "device": "iPhone 13 viewport; desktop host, not a physical iPhone",
+  "photos": {
+    "cup": {
+      "nails": 8,
+      "hands": 0,
+      "matched": 0,
+      "status": "8 片指甲 · 8 片按全部设置",
+      "error": null,
+      "readyMs": 4372,
+      "withFingerLabelsMs": 5269,
+      "clipping": {
+        "outside": 0,
+        "changed": 34907
+      }
+    },
+    "two-hands": {
+      "nails": 6,
+      "hands": 1,
+      "matched": 2,
+      "status": "6 片指甲 · 4 片按全部设置",
+      "error": null,
+      "readyMs": 2272,
+      "withFingerLabelsMs": 2280,
+      "clipping": {
+        "outside": 0,
+        "changed": 18036
+      }
+    },
+    "almond-long": {
+      "nails": 5,
+      "hands": 1,
+      "matched": 5,
+      "status": "5 片指甲",
+      "error": null,
+      "readyMs": 2778,
+      "withFingerLabelsMs": 2790,
+      "clipping": {
+        "outside": 0,
+        "changed": 37744
+      }
+    },
+    "crossed": {
+      "nails": 2,
+      "hands": 2,
+      "matched": 2,
+      "status": "2 片指甲",
+      "error": null,
+      "readyMs": 2212,
+      "withFingerLabelsMs": 2219,
+      "clipping": {
+        "outside": 0,
+        "changed": 3092
+      }
+    }
+  },
+  "functional": "PASS: clipping, unknown-finger design, drag, correction/reset, single-finger editing, pattern/finish/decor/shape/extension, clean image/text export, threshold re-decode, stale-state clearing, local-only photos"
+}

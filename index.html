@@ -89,8 +89,8 @@ button:focus-visible,.ibtn:focus-within{outline:2px solid var(--accent);outline-
   <div class="stage" id="viewer"><canvas id="cv" width="720" height="960"></canvas></div>
   <div class="overlay" id="overlay">
     <div class="spin" id="spin"></div>
-    <p class="big" id="ovTitle">正在加载手部识别模型</p>
-    <p id="ovText">第一次打开要下载约 10 MB，之后会快很多。</p>
+    <p class="big" id="ovTitle">正在加载指甲识别模型</p>
+    <p id="ovText">照片只在本机处理。首次下载模型后会自动缓存。</p>
   </div>
   <div class="top">
     <span class="pill" id="stHands">还没有照片</span>
@@ -131,7 +131,7 @@ button:focus-visible,.ibtn:focus-within{outline:2px solid var(--accent);outline-
       <div class="pane" id="pane-fin">
         <p class="lbl">质感</p><div class="seg" id="finSeg"></div>
         <p class="lbl">甲型</p><div class="seg" id="shapeSeg"></div>
-        <p class="lbl">长度</p><div class="seg" id="lenSeg"></div>
+        <p class="lbl">延长（可选，默认保留真实甲长）</p><div class="seg" id="lenSeg"></div>
       </div>
       <div class="pane" id="pane-pos">
         <div class="sliders">
@@ -140,13 +140,12 @@ button:focus-visible,.ibtn:focus-within{outline:2px solid var(--accent);outline-
           <span>角度</span><input type="range" id="adjR" min="-90" max="90" value="0"><output id="adjROut">0°</output>
         </div>
         <div class="posrow"><p class="tip">在图上点一片指甲选中，按住拖动挪位置。</p><button class="ibtn" id="resetBtn" disabled>恢复自动</button></div>
-        <p class="lbl">关键点参数（全部指甲）</p>
+        <p class="lbl">识别</p>
         <div class="sliders">
-          <span>前伸</span><input type="range" id="calFwd" min="0" max="80" value="32"><output id="calFwdOut">0.32</output>
-          <span>后缩</span><input type="range" id="calBack" min="0" max="80" value="32"><output id="calBackOut">0.32</output>
+          <span>门槛</span><input type="range" id="conf" min="10" max="70" value="30"><output id="confOut">0.30</output>
         </div>
-        <div class="posrow"><label class="tip" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="showPts">显示关键点</label><button class="ibtn" id="calReset">参数恢复默认</button></div>
-        <p class="tip">单位是末节指骨长度的倍数。宽度自动从照片里量手指粗细得出，用上面"宽窄"微调。</p>
+        <div class="posrow"><label class="tip" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="showSeg">显示识别轮廓</label><label class="tip" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="showPts">显示手部关键点</label></div>
+        <p class="tip">轮廓来自指甲分割模型。门槛调低能找回漏掉的指甲，调高能去掉误识别。宽窄、长短、角度在识别出的轮廓上微调。</p>
       </div>
     </div>
   </section>
@@ -178,17 +177,22 @@ const CODES=new Map();FAMS.forEach(([p,_,hs])=>hs.forEach((h,i)=>CODES.set(h.toU
 const FINISHES=[['gloss','亮面'],['matte','哑光'],['jelly','果冻'],['chrome','镜面'],['cateye','猫眼'],['glitter','闪粉'],['aurora','极光']];
 const PATTERNS=[['none','纯色'],['french','法式'],['vfrench','V法式'],['gradient','渐变'],['moon','月牙'],['half','斜切'],['dots','波点'],['stripes','条纹'],['check','格纹'],['heart','爱心'],['star','星星'],['flower','小花'],['marble','大理石'],['tipglitter','指尖闪']];
 const DECORS=[['none','无'],['gem','水钻'],['pearl','珍珠'],['gems3','三颗钻'],['chain','金链']];
-const LENGTHS=[['short','自然'],['medium','中长'],['long','加长']];
-const SHAPES=[['round','圆形'],['square','方形'],['almond','杏仁形'],['coffin','芭蕾形']];
+const LENGTHS=[['none','不延长'],['medium','延长一点'],['long','加长']];
+const EXT={none:1,medium:1.3,long:1.65};
+const SHAPES=[['mask','真实轮廓'],['round','圆形'],['square','方形'],['almond','杏仁形'],['coffin','芭蕾形']];
 const FNAMES=['拇指','食指','中指','无名指','小指'];
-const TIP=[4,8,12,16,20], DIP=[3,7,11,15,19], PIP=[2,6,10,14,18];
+const TIP=[4,8,12,16,20], DIP=[3,7,11,15,19];
 
-const CAL0={fwd:.32,back:.32,w:.70,t:.78};
-const st={scope:'all',finger:1,shape:'round',len:'short',layer:'base',opacity:1,cal:{...CAL0},showPts:false,per:Array.from({length:5},()=>({color:'#C41E30',pc:'#FFFFFF',finish:'gloss',pattern:'none',decor:'none'}))};
-try{Object.assign(st,JSON.parse(localStorage.getItem('nail-tryon-v3')||'{}'));st.cal={...CAL0,...(st.cal||{})};st.per.forEach(p=>{p.pc??='#FFFFFF';p.pattern??='none';p.decor??='none'})}catch(e){}
-const save=()=>{try{localStorage.setItem('nail-tryon-v3',JSON.stringify(st))}catch(e){}};
-const targets=()=>st.scope==='all'?[0,1,2,3,4]:[st.finger];
-const cur=()=>st.per[st.scope==='all'?1:st.finger];
+// per[f] is each finger's design; rest is the "全部" design, also used for nails that didn't match a finger
+const P0=()=>({color:'#C41E30',pc:'#FFFFFF',finish:'gloss',pattern:'none',decor:'none'});
+const st={scope:'all',finger:1,shape:'mask',len:'none',layer:'base',opacity:1,conf:.3,showPts:false,showSeg:false,rest:P0(),per:Array.from({length:5},P0)};
+try{const s=JSON.parse(localStorage.getItem('nail-tryon-v4')||'null'),o=JSON.parse(localStorage.getItem('nail-tryon-v3')||'null');
+  if(s)Object.assign(st,s);else if(o&&Array.isArray(o.per)){st.per=o.per;st.opacity=o.opacity??1;st.rest={...o.per[1]}}
+  st.per.forEach(p=>{p.pc??='#FFFFFF';p.pattern??='none';p.decor??='none'});st.rest={...P0(),...st.rest};
+  if(!SHAPES.some(x=>x[0]===st.shape))st.shape='mask';if(!(st.len in EXT))st.len='none'}catch(e){}
+const save=()=>{try{localStorage.setItem('nail-tryon-v4',JSON.stringify(st))}catch(e){}};
+const targets=()=>st.scope==='all'?[...st.per,st.rest]:[st.per[st.finger]];
+const cur=()=>st.scope==='all'?st.rest:st.per[st.finger];
 const curColor=()=>st.layer==='pc'?cur().pc:cur().color;
 const ck=()=>st.layer==='pc'?'pc':'color';
 
@@ -221,23 +225,25 @@ function syncUI(){
   press($('patGrid'),'k',cur().pattern);drawPatThumbs();
   $('opacity').value=Math.round(st.opacity*100);$('opOut').value=Math.round(st.opacity*100)+'%';
   const a=adjOf();$('adjW').value=a.w*100;$('adjWOut').value=Math.round(a.w*100)+'%';$('adjL').value=a.l*100;$('adjLOut').value=Math.round(a.l*100)+'%';$('adjR').value=a.r;$('adjROut').value=a.r+'°';
-  const cl=st.cal;$('calFwd').value=cl.fwd*100;$('calFwdOut').value=cl.fwd.toFixed(2);$('calBack').value=cl.back*100;$('calBackOut').value=cl.back.toFixed(2);$('showPts').checked=st.showPts;
-  $('stSel').textContent=st.scope==='all'?'· 十指同色':'· '+FNAMES[st.finger];
+  $('conf').value=Math.round(st.conf*100);$('confOut').value=st.conf.toFixed(2);$('showPts').checked=st.showPts;$('showSeg').checked=st.showSeg;
+  const sn=sel!=null&&nails.find(n=>n.id===sel);
+  $('stSel').textContent=sn&&sn.f<0?'· 这片没对上手指，按全部设置':st.scope==='all'?'· 十指同色':'· '+FNAMES[st.finger];
 }
 buildStatic();
 
 document.addEventListener('click',e=>{
   const b=e.target.closest('button');if(!b)return;const p=b.parentElement.id,pp=b.parentElement.parentElement;
-  if(p==='fingerSel'){if(b.dataset.i==='all')st.scope='all';else{st.scope='one';st.finger=+b.dataset.i}}
+  if(p==='fingerSel'){if(b.dataset.i==='all'){st.scope='all';sel=null}else{st.scope='one';st.finger=+b.dataset.i;
+    // select that finger's nail, preferring the hand picked last
+    const m=nails.filter(n=>n.f===st.finger);sel=(m.find(n=>n.k===selHand)||m[0]||{id:null}).id}}
   else if(b.getAttribute('role')==='tab'){b.parentElement.querySelectorAll('[role=tab]').forEach(t=>t.setAttribute('aria-selected',String(t===b)));document.querySelectorAll('.pane').forEach(pn=>pn.classList.toggle('on',pn.id==='pane-'+b.dataset.t));$('sheet').classList.remove('min');return}
   else if(b.id==='foldBtn'){const m=$('sheet').classList.toggle('min');b.textContent=m?'︽':'︾';return}
   else if(b.id==='shotClose'){$('shot').hidden=true;return}
-  else if(b.id==='calReset'){st.cal={...CAL0};save();syncUI();computeBase();draw();return}
-  else if(b.classList.contains('chip'))targets().forEach(i=>st.per[i][ck()]=b.dataset.c);
+  else if(b.classList.contains('chip'))targets().forEach(p=>p[ck()]=b.dataset.c);
   else if(p==='layerSeg')st.layer=b.dataset.k;
-  else if(p==='finSeg')targets().forEach(i=>st.per[i].finish=b.dataset.k);
-  else if(p==='decSeg')targets().forEach(i=>st.per[i].decor=b.dataset.k);
-  else if(p==='patGrid')targets().forEach(i=>st.per[i].pattern=b.dataset.k);
+  else if(p==='finSeg')targets().forEach(p=>p.finish=b.dataset.k);
+  else if(p==='decSeg')targets().forEach(p=>p.decor=b.dataset.k);
+  else if(p==='patGrid')targets().forEach(p=>p.pattern=b.dataset.k);
   else if(p==='shapeSeg')st.shape=b.dataset.k;
   else if(p==='lenSeg'){st.len=b.dataset.k;save();syncUI();draw();return}
   else return;
@@ -245,13 +251,14 @@ document.addEventListener('click',e=>{
 });
 document.addEventListener('input',e=>{
   const id=e.target.id;
-  if(id==='hue'||id==='sat'||id==='lig'){const h=hslToHex(+$('hue').value,+$('sat').value,+$('lig').value);targets().forEach(i=>st.per[i][ck()]=h);
+  if(id==='hue'||id==='sat'||id==='lig'){const h=hslToHex(+$('hue').value,+$('sat').value,+$('lig').value);targets().forEach(p=>p[ck()]=h);
     $('hueOut').value=$('hue').value+'°';$('satOut').value=$('sat').value+'%';$('ligOut').value=$('lig').value+'%';
     $('nowDot').style.background=h;$('nowCode').textContent=codeOf(h);$('nowHex').textContent=h;
     $('card').querySelectorAll('.chip').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.c.toUpperCase()===h)));
     $('fingerSel').querySelectorAll('i').forEach((el,i)=>el.style.background=st.per[i].color);drawPatThumbs();save();draw();return}
-  if(id==='calFwd'||id==='calBack'){const k={calFwd:'fwd',calBack:'back'}[id];st.cal[k]=e.target.value/100;$(id+'Out').value=st.cal[k].toFixed(2);save();computeBase();draw();return}
-  if(id==='showPts'){st.showPts=e.target.checked;save();draw();return}
+  if(id==='conf'){st.conf=e.target.value/100;$('confOut').value=st.conf.toFixed(2);save();
+    if(!redecode.pending){redecode.pending=true;requestAnimationFrame(()=>{redecode.pending=false;redecode()})}return}
+  if(id==='showPts'||id==='showSeg'){st[id]=e.target.checked;save();draw();return}
   if(id==='opacity'){st.opacity=e.target.value/100;$('opOut').value=e.target.value+'%';save();draw();return}
   if(id==='adjW'||id==='adjL'||id==='adjR'){const v=+e.target.value;
     adjTargets().forEach(a=>{if(id==='adjW')a.w=v/100;else if(id==='adjL')a.l=v/100;else a.r=v});
@@ -269,103 +276,72 @@ function unitPath(ctx,shape){
 }
 function rng(a){return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
 
-// per-hand, per-finger manual adjustments (reset on a new photo)
-let adj={};
-const adjOf=(k=selHand,f=st.scope==='all'?1:st.finger)=>(adj[k]??={})[f]??={dx:0,dy:0,w:1,l:1,r:0};
-function adjTargets(){const out=[];
-  const hands=lastHands.length?lastHands.map((_,k)=>k):[0];
-  (st.scope==='all'?hands:[selHand]).forEach(k=>(st.scope==='all'?[0,1,2,3,4]:[st.finger]).forEach(f=>out.push(adjOf(k,f))));return out}
-
-// finger width from the photo: scan sideways from the finger axis until the colour stops looking like the skin there
-let photoImg=null;
-function fingerWidth(img,W,H,tip,dip,ux,uy,seg){
-  const d=img.data,vx=-uy,vy=ux;
-  const px=(x,y)=>{x=Math.round(x);y=Math.round(y);if(x<1||y<1||x>=W-1||y>=H-1)return null;const i=(y*W+x)*4;return[d[i],d[i+1],d[i+2]]};
-  const widths=[];
-  for(const t of [.55,.75,.95]){
-    const ax=tip.x-ux*seg*t,ay=tip.y-uy*seg*t;
-    let ref=[0,0,0],n=0;for(let a=-2;a<=2;a++)for(let b=-2;b<=2;b++){const p=px(ax+a,ay+b);if(p){ref[0]+=p[0];ref[1]+=p[1];ref[2]+=p[2];n++}}
-    if(!n)continue;ref=ref.map(v=>v/n);
-    const run=sign=>{let miss=0,last=0;for(let r=1;r<seg*1.3;r++){const p=px(ax+vx*r*sign,ay+vy*r*sign);if(!p)break;
-        // skin vs table: compare chroma (r-g, g-b) more than brightness, so shading on the finger doesn't end the scan early
-        const dist=Math.hypot(((p[0]-p[1])-(ref[0]-ref[1]))*1.6,((p[1]-p[2])-(ref[1]-ref[2]))*1.6,((p[0]+p[1]+p[2])-(ref[0]+ref[1]+ref[2]))*.25);
-        if(dist>26){if(++miss>=3)return last}else{miss=0;last=r}
-        ref=[ref[0]*.97+p[0]*.03,ref[1]*.97+p[1]*.03,ref[2]*.97+p[2]*.03]}
-      return last};
-    const l=run(1),r=run(-1);if(l>2&&r>2)widths.push(l+r);
-  }
-  if(widths.length<2)return null;widths.sort((a,b)=>a-b);
-  const w=widths[Math.floor(widths.length/2)];
-  return (w>seg*.35&&w<seg*1.6)?w:null;
+// Manual corrections are per segmentation instance, including nails without a hand.
+let adj={},nails=[],sel=null;
+const defaultAdj=()=>({dx:0,dy:0,w:1,l:1,r:0});
+const adjOf=(id=sel)=>id==null?allAdj:(adj[id]??={...allAdj});
+let allAdj=defaultAdj();
+function adjTargets(){
+  if(st.scope==='all'&&sel==null)return[allAdj,...nails.map(n=>adjOf(n.id))];
+  const ns=sel!=null?nails.filter(n=>n.id===sel):nails.filter(n=>n.f===st.finger);
+  return ns.map(n=>adjOf(n.id));
 }
-// landmark-only estimate of one nail: used as the search seed and as the fallback
-function seedFrame(lm,W,H,f){
-  const P=i=>({x:lm[i].x*W,y:lm[i].y*H});
-  const tip=P(TIP[f]),dip=P(DIP[f]),pip=P(PIP[f]);
-  const dx=tip.x-dip.x,dy=tip.y-dip.y,segL=Math.hypot(dx,dy)||1,seg2=Math.hypot(dip.x-pip.x,dip.y-pip.y);
-  const ux=dx/segL,uy=dy/segL,ref=Math.max(segL,seg2*.9);
-  // MediaPipe's TIP landmark sits on the nail itself (about its upper third), not at the skin edge:
-  // the nail runs from ~0.32·seg behind it to ~0.32·seg past it, and is ~0.7·seg wide on an adult hand
-  const c=st.cal,back=segL*c.back;
-  const fw=photoImg?fingerWidth(photoImg,W,H,tip,dip,ux,uy,segL):null;
-  // measured finger width, but never wider than the finger could plausibly be relative to its last bone
-  const w=fw?Math.min(fw*(f===0?.72:.66),ref*(f===0?.9:.8)):ref*(f===0?c.t:c.w);
-  return {cx:tip.x-ux*back,cy:tip.y-uy*back,ang:Math.atan2(uy,ux)-Math.PI/2,w,l:segL*(c.back+c.fwd),ux,uy,seg:segL,tip,dip,pip,measured:!!fw};
-}
-// snap the seed onto the real nail: pixels near the fingertip whose colour differs from the finger's skin
-function refineFrame(img,W,H,s){
-  const d=img.data,{ux,uy,seg,tip,dip,pip}=s,vx=-uy,vy=ux;
-  const px=(x,y)=>{x|=0;y|=0;if(x<0||y<0||x>=W||y>=H)return null;const i=(y*W+x)*4;return[d[i],d[i+1],d[i+2]]};
-  // skin reference: a disc on the middle phalanx
-  const sx=(dip.x+pip.x)/2,sy=(dip.y+pip.y)/2,sr=Math.max(3,seg*.16);let n=0,ar=0,ag=0,ab=0;
-  for(let y=sy-sr;y<=sy+sr;y+=1)for(let x=sx-sr;x<=sx+sr;x+=1){if((x-sx)**2+(y-sy)**2>sr*sr)continue;const p=px(x,y);if(!p)continue;ar+=p[0];ag+=p[1];ab+=p[2];n++}
-  if(n<20)return null;ar/=n;ag/=n;ab/=n;
-  const sL=.299*ar+.587*ag+.114*ab,sC1=ar-ag,sC2=ag-ab;
-  // search window: along the finger from 0.1·seg past the fingertip back to the DIP joint, ±0.6·seg sideways
-  const cx0=tip.x-ux*seg*.45,cy0=tip.y-uy*seg*.45,R=seg*.75;
-  const x0=Math.max(0,Math.floor(cx0-R)),x1=Math.min(W-1,Math.ceil(cx0+R)),y0=Math.max(0,Math.floor(cy0-R)),y1=Math.min(H-1,Math.ceil(cy0+R));
-  const bw=x1-x0+1,bh=y1-y0+1,mask=new Uint8Array(bw*bh);
-  const step=seg>140?2:1;
-  for(let y=y0;y<=y1;y+=step)for(let x=x0;x<=x1;x+=step){
-    const rx=x-tip.x,ry=y-tip.y,along=rx*ux+ry*uy,across=rx*vx+ry*vy;
-    if(along>seg*.12||along<-seg*.95||Math.abs(across)>seg*.6)continue;
-    const p=px(x,y);const L=.299*p[0]+.587*p[1]+.114*p[2];
-    const dc=Math.hypot((p[0]-p[1])-sC1,(p[1]-p[2])-sC2),dl=Math.abs(L-sL);
-    if(dc>16||dl>30)mask[(y-y0)*bw+(x-x0)]=1;
-  }
-  // keep the component connected to the expected nail centre
-  const seen=new Uint8Array(bw*bh),q=[],pts=[];
-  const seedR=seg*.18;
-  for(let y=-seedR;y<=seedR;y+=step)for(let x=-seedR;x<=seedR;x+=step){const gx=Math.round(cx0+x-x0),gy=Math.round(cy0+y-y0);if(gx<0||gy<0||gx>=bw||gy>=bh)continue;const i=gy*bw+gx;if(mask[i]&&!seen[i]){seen[i]=1;q.push(i)}}
-  while(q.length){const i=q.pop();const gx=i%bw,gy=(i-gx)/bw;pts.push(gx+x0,gy+y0);
-    for(const [ox,oy] of [[step,0],[-step,0],[0,step],[0,-step]]){const nx=gx+ox,ny=gy+oy;if(nx<0||ny<0||nx>=bw||ny>=bh)continue;const j=ny*bw+nx;if(mask[j]&&!seen[j]){seen[j]=1;q.push(j)}}}
-  const cnt=pts.length/2;if(cnt*step*step<seg*seg*.06)return null;
-  // orientation from the component's principal axis, sign from the finger direction
-  let mx=0,my=0;for(let i=0;i<pts.length;i+=2){mx+=pts[i];my+=pts[i+1]}mx/=cnt;my/=cnt;
-  let sxx=0,sxy=0,syy=0;for(let i=0;i<pts.length;i+=2){const ex=pts[i]-mx,ey=pts[i+1]-my;sxx+=ex*ex;sxy+=ex*ey;syy+=ey*ey}
-  let th=.5*Math.atan2(2*sxy,sxx-syy);let ax=Math.cos(th),ay=Math.sin(th);
-  if(ax*ux+ay*uy<0){ax=-ax;ay=-ay}
-  // don't trust an axis that disagrees wildly with the finger
-  if(ax*ux+ay*uy<Math.cos(55*Math.PI/180)){ax=ux;ay=uy}
-  const bx=-ay,by=ax,al=[],ac=[];
-  for(let i=0;i<pts.length;i+=2){const ex=pts[i]-mx,ey=pts[i+1]-my;al.push(ex*ax+ey*ay);ac.push(ex*bx+ey*by)}
-  al.sort((p,q)=>p-q);ac.sort((p,q)=>p-q);
-  const pc=(arr,t)=>arr[Math.min(arr.length-1,Math.max(0,Math.floor(arr.length*t)))];
-  const lo=pc(al,.03),hi=pc(al,.985),wl=pc(ac,.03),wh=pc(ac,.97);
-  const l=hi-lo,w=wh-wl;
-  if(w<seg*.3||w>seg*1.25||l<seg*.25||l>seg*1.5)return null;
-  const cxm=mx+bx*(wl+wh)/2,cym=my+by*(wl+wh)/2;
-  return {cx:cxm+ax*lo,cy:cym+ay*lo,ang:Math.atan2(ay,ax)-Math.PI/2,w:w*1.04,l:l*1.03,snapped:true};
-}
-let baseFrames=[];
 function computeBase(){
-  baseFrames=[];if(!photo)return;
-  const W=cv.width,H=cv.height,img=photo.getContext('2d').getImageData(0,0,W,H);photoImg=img;
-  lastHands.forEach(lm=>{const row=[];for(let f=0;f<5;f++){const s=seedFrame(lm,W,H,f);let r=null;row.push(r||{cx:s.cx,cy:s.cy,ang:s.ang,w:s.w,l:s.l,snapped:false})}baseFrames.push(row)});
+  if(!nails.length)return;
+  const W=cv.width,H=cv.height,mx=nails.reduce((a,n)=>a+n.mx,0)/nails.length,my=nails.reduce((a,n)=>a+n.my,0)/nails.length;
+  const tips=[];
+  lastHands.forEach((lm,k)=>TIP.forEach((t,f)=>tips.push({k,f,tip:{x:lm[t].x*W,y:lm[t].y*H},dip:{x:lm[DIP[f]].x*W,y:lm[DIP[f]].y*H}})));
+  for(const n of nails){
+    n.f=-1;n.k=-1;
+    let nearest=null,distance=Infinity;
+    for(const p of tips){
+      const d=Math.hypot(n.mx-p.tip.x,n.my-p.tip.y);
+      if(d<distance){nearest=p;distance=d}
+    }
+    if(nearest){
+      const bone=Math.hypot(nearest.tip.x-nearest.dip.x,nearest.tip.y-nearest.dip.y);
+      if(distance<Math.max(n.hi-n.lo,n.right-n.left,bone)*1.5){n.f=nearest.f;n.k=nearest.k;n.match=nearest}
+    }
+  }
+  for(const n of nails){
+    let dx=n.mx-mx,dy=n.my-my;
+    if(n.f>=0){dx=n.match.tip.x-n.match.dip.x;dy=n.match.tip.y-n.match.dip.y}
+    if(Math.hypot(dx,dy)<1e-5){dx=0;dy=-1}
+    const sign=n.ux*dx+n.uy*dy<0?-1:1,ux=n.ux*sign,uy=n.uy*sign;
+    const lo=sign>0?n.lo:-n.hi,hi=sign>0?n.hi:-n.lo;
+    const across=(n.left+n.right)/2*sign;
+    n.base={cx:n.mx+ux*lo+uy*across,cy:n.my+uy*lo-ux*across,ang:Math.atan2(uy,ux)-Math.PI/2,w:n.right-n.left,l:hi-lo};
+    adjOf(n.id);
+  }
 }
-function nailFrames(lm,W,H,k){
-  const row=baseFrames[k];if(!row)return[];
-  return row.map((b,f)=>{const a=adjOf(k,f);return{cx:b.cx+a.dx,cy:b.cy+a.dy,ang:b.ang+a.r*Math.PI/180,w:b.w*a.w,l:b.l*a.l*({short:1,medium:1.3,long:1.65}[st.len]||1),f,k}});
+function nailFrames(){return nails.map(n=>{
+  const b=n.base,a=adjOf(n.id);
+  return{...n,cx:b.cx+a.dx,cy:b.cy+a.dy,ang:b.ang+a.r*Math.PI/180,w:b.w*a.w,l:b.l*a.l*EXT[st.len]};
+})}
+// Threshold after bilinear upsampling, then feather alpha explicitly. Canvas.filter is
+// unavailable on older Safari; this small separable blur works identically there.
+function makeMask(n){
+  const small=document.createElement('canvas');small.width=n.mw;small.height=n.mh;
+  const s=small.getContext('2d'),im=s.createImageData(n.mw,n.mh);
+  for(let i=0;i<n.alpha.length;i++){im.data[i*4]=im.data[i*4+1]=im.data[i*4+2]=255;im.data[i*4+3]=n.alpha[i]}
+  s.putImageData(im,0,0);
+  const mask=document.createElement('canvas'),rx=Math.floor(n.rx),ry=Math.floor(n.ry);
+  mask.width=Math.max(1,Math.ceil(n.rx+n.rw)-rx);mask.height=Math.max(1,Math.ceil(n.ry+n.rh)-ry);
+  const c=mask.getContext('2d',{willReadFrequently:true});c.drawImage(small,n.rx-rx,n.ry-ry,n.rw,n.rh);
+  // Rasterize onto original integer pixel coordinates once, then reuse without
+  // another fractional resize when compositing cropped layers (Safari included).
+  n.rx=rx;n.ry=ry;n.rw=mask.width;n.rh=mask.height;
+  const data=c.getImageData(0,0,mask.width,mask.height),d=data.data,W=mask.width,H=mask.height;
+  const a=new Uint8Array(W*H),tmp=new Float32Array(a.length);
+  for(let i=0;i<a.length;i++)a[i]=Math.max(0,Math.min(255,(d[i*4+3]-115)*255/25));
+  const radius=Math.max(1,Math.min(3,Math.round(Math.min(n.rw,n.rh)*.012))),diam=radius*2+1;
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+    let sum=0;for(let k=-radius;k<=radius;k++)if(x+k>=0&&x+k<W)sum+=a[y*W+x+k];tmp[y*W+x]=sum/diam;
+  }
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+    let sum=0;for(let k=-radius;k<=radius;k++)if(y+k>=0&&y+k<H)sum+=tmp[(y+k)*W+x];d[(y*W+x)*4+3]=sum/diam;
+  }
+  c.putImageData(data,0,0);return mask;
 }
 function patternLayer(ctx,p,seed){
   const pc=p.pc,k=p.pattern;if(k==='none')return;
@@ -411,113 +387,300 @@ function decorLayer(ctx,p){
   else if(p.decor==='gems3'){gem(0,.18,.085);gem(-.17,.3,.065);gem(.17,.3,.065)}
   else if(p.decor==='chain'){ctx.strokeStyle='#D4AF37';ctx.lineWidth=.035;ctx.beginPath();ctx.moveTo(-.5,.62);ctx.quadraticCurveTo(0,.5,.5,.62);ctx.stroke();for(let x=-.42;x<=.42;x+=.14){ctx.fillStyle='#F2D47A';ctx.beginPath();ctx.arc(x,.62-.11*(1-(x/.5)**2),.03,0,Math.PI*2);ctx.fill()}}
 }
+function frameTransform(o,n,ox=0,oy=0){o.translate(n.cx-ox,n.cy-oy);o.rotate(n.ang);o.scale(n.w,n.l)}
+function drawInstanceMask(o,n,ox=0,oy=0){
+  // One original-pixel affine avoids round-trip resampling at unadjusted edges.
+  const b=n.base;
+  if(n.w===b.w&&n.l===b.l&&n.ang===b.ang){o.setTransform(1,0,0,1,n.cx-b.cx-ox,n.cy-b.cy-oy)}
+  else{
+    const co=Math.cos(n.ang),si=Math.sin(n.ang),bc=Math.cos(b.ang),bs=Math.sin(b.ang),sx=n.w/b.w,sy=n.l/b.l;
+    const a=co*sx*bc+si*sy*bs,c=co*sx*bs-si*sy*bc;
+    const bb=si*sx*bc-co*sy*bs,d=si*sx*bs+co*sy*bc;
+    o.setTransform(a,bb,c,d,n.cx-a*b.cx-c*b.cy-ox,n.cy-bb*b.cx-d*b.cy-oy);
+  }
+  o.drawImage(n.mask,n.rx,n.ry,n.rw,n.rh);
+}
 function paintNail(ctx,src,n,selected){
-  const p=st.per[n.f],seed=n.k*31+n.f+7;
-  const alpha=p.finish==='jelly'?Math.min(st.opacity,.72):st.opacity;
-  // feathered edge: paint through a slightly blurred clip by drawing to an offscreen layer
-  const pad=Math.ceil(Math.max(n.w,n.l)*1.4),ox=n.cx-pad,oy=n.cy-pad,sz=pad*2;
-  const off=paintNail.off||(paintNail.off=document.createElement('canvas'));off.width=sz;off.height=sz;const o=off.getContext('2d');
-  o.save();o.translate(n.cx-ox,n.cy-oy);o.rotate(n.ang);o.scale(n.w,n.l);unitPath(o,st.shape);o.clip();
-  o.fillStyle=hexA(p.color,alpha);o.fillRect(-.6,-.2,1.2,1.4);
+  const p=n.f<0?st.rest:st.per[n.f],seed=n.id+7;
+  const co=Math.cos(n.ang),si=Math.sin(n.ang),corners=[[-.5,0],[.5,0],[-.5,1],[.5,1]].map(([x,y])=>({x:n.cx+co*x*n.w-si*y*n.l,y:n.cy+si*x*n.w+co*y*n.l}));
+  const pad=5,ox=Math.floor(Math.min(...corners.map(p=>p.x)))-pad,oy=Math.floor(Math.min(...corners.map(p=>p.y)))-pad;
+  const W=Math.ceil(Math.max(...corners.map(p=>p.x))-ox)+pad,H=Math.ceil(Math.max(...corners.map(p=>p.y))-oy)+pad;
+  const off=paintNail.off||(paintNail.off=document.createElement('canvas'));off.width=W;off.height=H;const o=off.getContext('2d');
+  o.save();frameTransform(o,n,ox,oy);
+  if(st.shape!=='mask'){unitPath(o,st.shape);o.clip()}
+  o.fillStyle=p.color;o.fillRect(-.5,0,1,1);
   patternLayer(o,p,seed);
-  // keep the photo's own lighting
-  o.save();o.setTransform(1,0,0,1,0,0);o.globalCompositeOperation='soft-light';o.globalAlpha=.2;o.drawImage(src,-ox,-oy,ctx.canvas.width,ctx.canvas.height);o.restore();
-  finishLayer(o,p,seed);
-  decorLayer(o,p);
-  o.restore();
-  // edge line
-  o.save();o.translate(n.cx-ox,n.cy-oy);o.rotate(n.ang);o.scale(n.w,n.l);unitPath(o,st.shape);o.restore();
-  o.strokeStyle='rgba(40,10,25,.35)';o.lineWidth=Math.max(1,n.w*.03);o.stroke();
-  ctx.save();ctx.filter=`blur(${Math.max(.4,n.w*.012)}px)`;ctx.drawImage(off,ox,oy);ctx.restore();
-  if(selected){ctx.save();ctx.translate(n.cx,n.cy);ctx.rotate(n.ang);ctx.scale(n.w,n.l);unitPath(ctx,st.shape);ctx.restore();ctx.setLineDash([6,4]);ctx.strokeStyle='#FFFFFF';ctx.lineWidth=Math.max(1.5,n.w*.05);ctx.stroke();ctx.setLineDash([])}
+  o.save();o.setTransform(1,0,0,1,0,0);o.globalCompositeOperation='soft-light';o.globalAlpha=.2;o.drawImage(src,-ox,-oy);o.restore();
+  finishLayer(o,p,seed);decorLayer(o,p);o.restore();
+  o.globalCompositeOperation='destination-in';o.save();drawInstanceMask(o,n,ox,oy);o.restore();
+  ctx.save();ctx.globalAlpha=p.finish==='jelly'?Math.min(st.opacity,.72):st.opacity;ctx.drawImage(off,ox,oy);ctx.restore();
+  if(st.showSeg){
+    o.globalCompositeOperation='source-in';o.fillStyle='#41FFC8';o.fillRect(0,0,W,H);
+    ctx.save();ctx.globalAlpha=.35;ctx.drawImage(off,ox,oy);ctx.restore();
+  }
+  if(selected){
+    ctx.save();frameTransform(ctx,n);ctx.beginPath();ctx.rect(-.5,0,1,1);ctx.restore();
+    ctx.setLineDash([5,4]);ctx.strokeStyle='#FFFFFF';ctx.lineWidth=Math.max(1.5,n.w*.025);ctx.stroke();ctx.setLineDash([]);
+  }
 }
 function drawPatThumbs(){
   const p=cur();
   $('patGrid').querySelectorAll('.pat').forEach(b=>{const c=b.querySelector('canvas'),x=c.getContext('2d');x.clearRect(0,0,68,92);
-    x.save();x.translate(34,10);x.scale(56,74);unitPath(x,st.shape);x.clip();x.fillStyle=p.color;x.fillRect(-.6,-.2,1.2,1.4);patternLayer(x,{...p,pattern:b.dataset.k},3);x.restore()});
+    x.save();x.translate(34,10);x.scale(56,74);unitPath(x,st.shape==='mask'?'round':st.shape);x.clip();x.fillStyle=p.color;x.fillRect(-.6,-.2,1.2,1.4);patternLayer(x,{...p,pattern:b.dataset.k},3);x.restore()});
 }
-/* ---------- pipeline ---------- */
+/* ---------- pipeline (all photos stay in this browser) ---------- */
+/* BEGIN DECODER */
+/* Shared, dependency-free YOLOv8-seg decoder. Embedded into index.html by build.mjs. */
+function decodeNails(det, proto, meta, confidence = .3) {
+  const [batch, channels, count] = det.dims;
+  const [pb, masks, ph, pw] = proto.dims;
+  if (batch !== 1 || pb !== 1 || channels !== 5 + masks || masks !== 32)
+    throw new Error('不支持的指甲模型输出');
+  const d = det.data, p = proto.data, candidates = [];
+  const {width, height, resizedW, resizedH, padX, padY, size = 640} = meta;
+  const sx = width / resizedW, sy = height / resizedH;
+  for (let i = 0; i < count; i++) {
+    const score = d[4 * count + i];
+    if (!Number.isFinite(score) || score < confidence) continue;
+    const cx = d[i], cy = d[count + i], w = d[2 * count + i], h = d[3 * count + i];
+    if (!(w > 0 && h > 0)) continue;
+    const x1 = Math.max(padX, cx - w / 2), y1 = Math.max(padY, cy - h / 2);
+    const x2 = Math.min(padX + resizedW, cx + w / 2), y2 = Math.min(padY + resizedH, cy + h / 2);
+    if (x2 - x1 < 2 || y2 - y1 < 2) continue;
+    candidates.push({id:i, score, x1, y1, x2, y2});
+  }
+  candidates.sort((a,b) => b.score - a.score);
+  const keep = [], iou = (a,b) => {
+    const intersection = Math.max(0,Math.min(a.x2,b.x2)-Math.max(a.x1,b.x1)) *
+      Math.max(0,Math.min(a.y2,b.y2)-Math.max(a.y1,b.y1));
+    return intersection / ((a.x2-a.x1)*(a.y2-a.y1)+(b.x2-b.x1)*(b.y2-b.y1)-intersection || 1);
+  };
+  // Bound work on very noisy images; never restrict detection to one or two hands.
+  for (const c of candidates.slice(0,1000)) {
+    if (keep.every(k => iou(c,k) < .45)) keep.push(c);
+    if (keep.length === 30) break;
+  }
+  const out = [], plane = pw * ph;
+  for (const b of keep) {
+    const px1 = Math.max(0,Math.floor(b.x1 * pw / size)-1);
+    const py1 = Math.max(0,Math.floor(b.y1 * ph / size)-1);
+    const px2 = Math.min(pw,Math.ceil(b.x2 * pw / size)+1);
+    const py2 = Math.min(ph,Math.ceil(b.y2 * ph / size)+1);
+    const mw = px2-px1, mh = py2-py1, alpha = new Uint8Array(mw*mh);
+    const points = [];
+    for (let y=0;y<mh;y++) for (let x=0;x<mw;x++) {
+      const px=px1+x, py=py1+y, nx=(px+.5)*size/pw, ny=(py+.5)*size/ph;
+      if (nx<b.x1 || nx>=b.x2 || ny<b.y1 || ny>=b.y2) continue;
+      let logit=0;
+      for (let c=0;c<masks;c++) logit += d[(5+c)*count+b.id] * p[c*plane+py*pw+px];
+      const probability=1/(1+Math.exp(-logit));
+      alpha[y*mw+x]=Math.round(probability*255);
+      if (probability>.5) points.push((nx-padX)*sx,(ny-padY)*sy);
+    }
+    if (points.length<6) continue;
+    let mx=0,my=0;
+    for(let j=0;j<points.length;j+=2){mx+=points[j];my+=points[j+1]}
+    mx/=points.length/2;my/=points.length/2;
+    let xx=0,xy=0,yy=0;
+    for(let j=0;j<points.length;j+=2){const x=points[j]-mx,y=points[j+1]-my;xx+=x*x;xy+=x*y;yy+=y*y}
+    const theta=.5*Math.atan2(2*xy,xx-yy), ux=Math.cos(theta),uy=Math.sin(theta);
+    let lo=Infinity,hi=-Infinity,left=Infinity,right=-Infinity;
+    for(let j=0;j<points.length;j+=2){
+      const x=points[j]-mx,y=points[j+1]-my,along=x*ux+y*uy,across=x*uy-y*ux;
+      lo=Math.min(lo,along);hi=Math.max(hi,along);left=Math.min(left,across);right=Math.max(right,across);
+    }
+    // Include the outer half of each prototype pixel in the PCA frame.
+    const halfAlong=(Math.abs(ux)*sx*size/pw+Math.abs(uy)*sy*size/ph)/2;
+    const halfAcross=(Math.abs(uy)*sx*size/pw+Math.abs(ux)*sy*size/ph)/2;
+    lo-=halfAlong;hi+=halfAlong;left-=halfAcross;right+=halfAcross;
+    out.push({...b,mx,my,ux,uy,lo,hi,left,right,mw,mh,alpha,
+      rx:(px1*size/pw-padX)*sx,ry:(py1*size/ph-padY)*sy,
+      rw:mw*size/pw*sx,rh:mh*size/ph*sy,
+      box:[(b.x1-padX)*sx,(b.y1-padY)*sy,(b.x2-padX)*sx,(b.y2-padY)*sy]});
+  }
+  return out;
+}/* END DECODER */
+function segmentationWorker(){
+  let session=null,cache=null,base='';
+  async function init(url){
+    base=url;importScripts(new URL('runtime/ort.wasm.min.js',base).href);
+    ort.env.wasm.wasmPaths=new URL('runtime/',base).href;
+    ort.env.wasm.numThreads=1;ort.env.wasm.proxy=false;
+    const modelURL=new URL('models/nails-int8.onnx?v=27ad00b46b2a',base).href;
+    let storage=null,response=null;
+    try{storage=await caches.open('nail-model-27ad00b46b2a');response=await storage.match(modelURL)}catch(e){}
+    const cached=!!response;
+    postMessage({type:'progress',text:cached?'正在读取已缓存的指甲模型。':'首次需要下载约 23.5 MB 模型和运行环境，正在下载指甲模型…'});
+    if(!response){response=await fetch(modelURL);if(!response.ok)throw new Error('指甲模型下载失败，请检查网络')}
+    const bytes=await response.arrayBuffer();
+    const digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');
+    if(digest!=='27ad00b46b2a57c3011dfda0bd325b88c4358d47a7a6d92d55cfe1e24f15f60b'){
+      if(storage)await storage.delete(modelURL);throw new Error('指甲模型校验失败，请重新选图重试');
+    }
+    if(storage&&!cached){try{await storage.put(modelURL,new Response(bytes))}catch(e){}}
+    postMessage({type:'progress',text:'正在准备推理环境，准备完成后开始识别…'});
+    session=await ort.InferenceSession.create(bytes,{executionProviders:['wasm'],graphOptimizationLevel:'all'});
+  }
+  onmessage=async({data:m})=>{
+    try{
+      if(m.type==='init'){await init(m.base);postMessage({id:m.id,type:'ready'});return}
+      if(m.type==='infer'){
+        const start=performance.now(),tensor=new ort.Tensor('float32',m.input,[1,3,640,640]);
+        const outputs=await session.run({[session.inputNames[0]]:tensor});
+        tensor.dispose();
+        if(cache)Object.values(cache.outputs).forEach(t=>t.dispose());
+        cache={outputs,meta:m.meta};
+        cache.ms=Math.round(performance.now()-start);
+      }
+      if(!cache)throw new Error('请先选择照片');
+      const values=Object.values(cache.outputs),det=values.find(t=>t.dims.length===3),proto=values.find(t=>t.dims.length===4);
+      if(!det||!proto)throw new Error('指甲模型输出不完整');
+      const nails=decodeNails(det,proto,cache.meta,m.conf);
+      postMessage({id:m.id,type:'result',nails,ms:cache.ms},nails.map(n=>n.alpha.buffer));
+    }catch(e){postMessage({id:m.id,type:'error',error:String(e.message||e)})}
+  };
+}
 const cv=$('cv'),ctx=cv.getContext('2d');
-let hands=null,photo=null,lastHands=[],frames=[],selHand=0;
+let hands=null,handsReady=null,handReceiver=null,handQueue=Promise.resolve(),photo=null,lastHands=[],frames=[],selHand=0,segmenter=null,segmentReady=null,requestId=0,photoVersion=0,decodeVersion=0;
+const pending=new Map();
 const setStatus=(t,warn)=>{$('stHands').textContent=t;$('stHands').classList.toggle('warn',!!warn)};
 const overlay=(title,text,spin)=>{$('overlay').hidden=!title;if(title){$('ovTitle').textContent=title;$('ovText').textContent=text||'';$('spin').hidden=!spin}};
-
+function workerRequest(message,transfer=[]){return new Promise((resolve,reject)=>{
+  const id=++requestId,timer=setTimeout(()=>{pending.delete(id);reject(new Error('处理超时，请换张较小的照片或刷新重试'))},120000);
+  pending.set(id,{resolve,reject,timer});segmenter.postMessage({...message,id},transfer);
+})}
+function loadSegmenter(){
+  if(segmentReady)return segmentReady;
+  segmentReady=(async()=>{
+    const code=decodeNails.toString()+'\n('+segmentationWorker.toString()+')();',url=URL.createObjectURL(new Blob([code],{type:'text/javascript'}));
+    try{segmenter=new Worker(url)}finally{URL.revokeObjectURL(url)}
+    segmenter.onmessage=({data:m})=>{
+      if(m.type==='progress'){if(!$('overlay').hidden&&!$('spin').hidden)$('ovText').textContent=m.text;return}
+      const p=pending.get(m.id);if(!p)return;pending.delete(m.id);clearTimeout(p.timer);
+      m.type==='error'?p.reject(new Error(m.error)):p.resolve(m);
+    };
+    segmenter.onerror=e=>{
+      for(const p of pending.values()){clearTimeout(p.timer);p.reject(new Error(e.message||'模型运行失败，请刷新重试'))}pending.clear();
+    };
+    await workerRequest({type:'init',base:new URL('.',location.href).href});
+  })().catch(e=>{if(segmenter)segmenter.terminate();segmentReady=null;throw e});
+  return segmentReady;
+}
 async function loadHands(){
-  let base='mp/',local=true;
-  try{const r=await fetch(base+'hands.binarypb.wasm',{method:'HEAD'});if(!r.ok)throw 0}catch(e){base='https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/';local=false}
-  const name=f=>local&&!/\.(js|wasm)$/.test(f)?f+'.wasm':f;
-  await new Promise((res,rej)=>{const s=document.createElement('script');s.src=base+'hands.js';s.onload=res;s.onerror=()=>rej(new Error('脚本加载失败'));document.head.appendChild(s)});
-  const h=new Hands({locateFile:f=>base+name(f)});
-  h.setOptions({maxNumHands:2,modelComplexity:1,minDetectionConfidence:.5,minTrackingConfidence:.5,staticImageMode:true,selfieMode:false});
-  h.onResults(onResults);
-  await h.initialize();return h;
+  const base=new URL('mp/',location.href).href;
+  await new Promise((res,rej)=>{const s=document.createElement('script');s.src=base+'hands.js';s.onload=res;s.onerror=()=>rej(new Error('手指归属模型加载失败'));document.head.appendChild(s)});
+  const h=new Hands({locateFile:f=>base+(!/\.(js|wasm)$/.test(f)?f+'.wasm':f)});
+  h.setOptions({maxNumHands:2,modelComplexity:1,minDetectionConfidence:.4,minTrackingConfidence:.4,staticImageMode:true,selfieMode:false});
+  h.onResults(r=>{if(handReceiver)handReceiver(r.multiHandLandmarks||[])});await h.initialize();return h;
 }
-function onResults(r){
-  lastHands=r.multiHandLandmarks||[];adj={};selHand=0;computeBase();
-  setStatus(lastHands.length?`识别到 ${lastHands.length} 只手`:'没识别到手：换一张手背朝镜头、指甲清楚的照片',!lastHands.length);draw();
+function updateDetectionStatus(ms){
+  const unmatched=nails.filter(n=>n.f<0).length;
+  setStatus(nails.length?`${nails.length} 片指甲${unmatched?` · ${unmatched} 片按全部设置`:''}`:'未找到清楚的指甲，可在“位置”降低门槛或换图',!nails.length);
+  $('stHands').title=ms?`模型推理 ${(ms/1000).toFixed(2)} 秒；手指归属仅在检测到手时可用`:'';
 }
-function draw(){
+function acceptNails(result){
+  nails=result.nails;for(const n of nails)n.mask=makeMask(n);
+  computeBase();if(sel!=null&&!nails.some(n=>n.id===sel))sel=null;
+  updateDetectionStatus(result.ms);draw();syncUI();
+}
+async function redecode(){
+  if(!photo||!segmentReady)return;
+  const v=++decodeVersion,pv=photoVersion;
+  try{const result=await workerRequest({type:'decode',conf:st.conf});if(v===decodeVersion&&pv===photoVersion)acceptNails(result)}
+  catch(e){setStatus(e.message,true)}
+}
+function draw(selection=true){
   if(!photo)return;
   ctx.setTransform(1,0,0,1,0,0);ctx.globalCompositeOperation='source-over';ctx.globalAlpha=1;
-  ctx.drawImage(photo,0,0,cv.width,cv.height);
-  frames=[];
-  lastHands.forEach((lm,k)=>nailFrames(lm,cv.width,cv.height,k).forEach(n=>{frames.push(n);paintNail(ctx,photo,n,st.scope==='one'&&k===selHand&&n.f===st.finger)}));
-  if(st.showPts){const W=cv.width,H=cv.height,r=Math.max(3,W/220);lastHands.forEach(lm=>{
-    for(let f=0;f<5;f++){const s=seedFrame(lm,W,H,f);ctx.strokeStyle='#2BB5FF';ctx.lineWidth=r*.7;ctx.beginPath();ctx.moveTo(s.dip.x,s.dip.y);ctx.lineTo(s.tip.x+s.ux*s.seg*.5,s.tip.y+s.uy*s.seg*.5);ctx.stroke()}
-    lm.forEach((p,i)=>{ctx.fillStyle=TIP.includes(i)?'#3BFF6A':'#FFE24A';ctx.beginPath();ctx.arc(p.x*W,p.y*H,r,0,Math.PI*2);ctx.fill()})})}
+  ctx.drawImage(photo,0,0,cv.width,cv.height);frames=nailFrames();
+  frames.forEach(n=>paintNail(ctx,photo,n,selection&&(sel===n.id||(sel==null&&st.scope==='one'&&n.f===st.finger&&n.k===selHand))));
+  if(st.showPts&&selection){const W=cv.width,H=cv.height,r=Math.max(2,W/300);lastHands.forEach(lm=>{
+    TIP.forEach((t,f)=>{ctx.strokeStyle='#2BB5FF';ctx.lineWidth=r*.7;ctx.beginPath();ctx.moveTo(lm[DIP[f]].x*W,lm[DIP[f]].y*H);ctx.lineTo(lm[t].x*W,lm[t].y*H);ctx.stroke()});
+    lm.forEach((p,i)=>{ctx.fillStyle=TIP.includes(i)?'#3BFF6A':'#FFE24A';ctx.beginPath();ctx.arc(p.x*W,p.y*H,r,0,Math.PI*2);ctx.fill()})
+  })}
 }
 function loadImage(file){
-  return new Promise((res,rej)=>{const url=URL.createObjectURL(file),im=new Image();im.onload=()=>{URL.revokeObjectURL(url);res(im)};im.onerror=()=>rej(new Error('图片打不开'));im.src=url});
+  return new Promise((res,rej)=>{const url=URL.createObjectURL(file),im=new Image();im.onload=()=>{URL.revokeObjectURL(url);res(im)};im.onerror=()=>{URL.revokeObjectURL(url);rej(new Error('图片打不开，请使用 JPG、PNG 或系统相机照片'))};im.src=url});
+}
+function prepareInput(src){
+  const size=640,ratio=Math.min(size/src.width,size/src.height),resizedW=Math.round(src.width*ratio),resizedH=Math.round(src.height*ratio),padX=Math.floor((size-resizedW)/2),padY=Math.floor((size-resizedH)/2);
+  const c=document.createElement('canvas');c.width=c.height=size;
+  const x=c.getContext('2d',{willReadFrequently:true});x.fillStyle='rgb(114,114,114)';x.fillRect(0,0,size,size);x.drawImage(src,padX,padY,resizedW,resizedH);
+  const rgba=x.getImageData(0,0,size,size).data,plane=size*size,input=new Float32Array(plane*3);
+  for(let i=0;i<plane;i++){input[i]=rgba[i*4]/255;input[plane+i]=rgba[i*4+1]/255;input[plane*2+i]=rgba[i*4+2]/255}
+  return{input,meta:{width:src.width,height:src.height,resizedW,resizedH,padX,padY,size}};
 }
 $('file').addEventListener('change',async e=>{
   const f=e.target.files[0];if(!f)return;
-  overlay('正在识别指甲','',true);
+  const version=++photoVersion;++decodeVersion;$('viewer').setAttribute('aria-busy','true');$('viewer').dataset.fingers='pending';
+  $('snapBtn').disabled=true;$('resetBtn').disabled=true;overlay('正在识别指甲','照片只在本机处理，首次加载需要一点时间。',true);
   try{
-    const im=await loadImage(f);
-    const k=Math.min(1,1600/Math.max(im.naturalWidth,im.naturalHeight));
-    const c=document.createElement('canvas');c.width=Math.round(im.naturalWidth*k);c.height=Math.round(im.naturalHeight*k);
-    c.getContext('2d').drawImage(im,0,0,c.width,c.height);
-    photo=c;cv.width=c.width;cv.height=c.height;
-    if(!hands)hands=await loadHands();
-    await hands.send({image:photo});
-    overlay(null);$('snapBtn').disabled=false;$('resetBtn').disabled=false;syncUI();
-  }catch(err){overlay('这张图没能处理',String(err.message||err),false)}
-  e.target.value='';
+    const im=await loadImage(f);if(version!==photoVersion)return;
+    const k=Math.min(1,1600/Math.max(im.naturalWidth,im.naturalHeight)),c=document.createElement('canvas');c.width=Math.round(im.naturalWidth*k);c.height=Math.round(im.naturalHeight*k);
+    c.getContext('2d').drawImage(im,0,0,c.width,c.height);photo=c;cv.width=c.width;cv.height=c.height;
+    adj={};allAdj=defaultAdj();sel=null;nails=[];lastHands=[];st.scope='all';draw();
+    await loadSegmenter();if(version!==photoVersion)return;
+    const prepared=prepareInput(photo),result=await workerRequest({type:'infer',...prepared,conf:st.conf},[prepared.input.buffer]);
+    if(version!==photoVersion)return;
+    acceptNails(result);overlay(null);$('snapBtn').disabled=false;$('resetBtn').disabled=!nails.length;
+    $('viewer').setAttribute('aria-busy','false');
+    // Landmarks only label fingers and orient patterns. A failure cannot block masks.
+    if(nails.length){
+      if(!handsReady)handsReady=loadHands().then(h=>(hands=h)).catch(()=>null);
+      const h=await handsReady;if(version!==photoVersion)return;
+      if(h){
+        await (handQueue=handQueue.catch(()=>{}).then(async()=>{
+          if(version!==photoVersion)return;
+          handReceiver=landmarks=>{if(version===photoVersion)lastHands=landmarks};
+          try{await h.send({image:photo})}catch(e){lastHands=[]}finally{handReceiver=null}
+        }));
+      }
+      if(version!==photoVersion)return;computeBase();updateDetectionStatus(result.ms);draw();syncUI();
+    }
+  }catch(err){if(version===photoVersion){overlay('这张图没能处理',String(err.message||err)+'；可重新选图重试。',false);setStatus('处理失败，请重新选图',true)}}
+  finally{if(version===photoVersion){$('viewer').setAttribute('aria-busy','false');$('viewer').dataset.fingers='done'}e.target.value=''}
 });
 
-/* drag to move a nail; tap to select it */
+/* drag the actual visible mask, rather than the nearest landmark rectangle */
 let drag=null;
 const toCanvas=e=>{const r=cv.getBoundingClientRect();return{x:(e.clientX-r.left)*cv.width/r.width,y:(e.clientY-r.top)*cv.height/r.height}};
+function maskHit(n,p){
+  const co=Math.cos(n.ang),si=Math.sin(n.ang),dx=p.x-n.cx,dy=p.y-n.cy;
+  const u=(co*dx+si*dy)/n.w,v=(-si*dx+co*dy)/n.l;
+  if(Math.abs(u)>.6||v<-.1||v>1.1)return false;
+  const b=n.base,bco=Math.cos(b.ang),bsi=Math.sin(b.ang),x=b.cx+bco*u*b.w-bsi*v*b.l,y=b.cy+bsi*u*b.w+bco*v*b.l;
+  const ix=Math.floor((x-n.rx)/n.rw*n.mask.width),iy=Math.floor((y-n.ry)/n.rh*n.mask.height);
+  return ix>=0&&iy>=0&&ix<n.mask.width&&iy<n.mask.height&&n.mask.getContext('2d').getImageData(ix,iy,1,1).data[3]>30;
+}
 cv.addEventListener('pointerdown',e=>{
-  if(!frames.length)return;const p=toCanvas(e);
-  let best=null,bd=1e9;frames.forEach(n=>{const cx=n.cx+Math.cos(n.ang+Math.PI/2)*n.l*.5,cy=n.cy+Math.sin(n.ang+Math.PI/2)*n.l*.5;const d=Math.hypot(p.x-cx,p.y-cy);if(d<bd){bd=d;best=n}});
-  if(!best||bd>best.w*1.3)return;
-  st.scope='one';st.finger=best.f;selHand=best.k;const a=adjOf(best.k,best.f);
-  drag={a,x:p.x,y:p.y,dx:a.dx,dy:a.dy};cv.setPointerCapture(e.pointerId);cv.style.cursor='grabbing';save();syncUI();draw();
+  if(!frames.length)return;const p=toCanvas(e),best=[...frames].reverse().find(n=>maskHit(n,p));if(!best)return;
+  sel=best.id;selHand=best.k;
+  if(best.f>=0){st.scope='one';st.finger=best.f}else st.scope='all';
+  const a=adjOf(best.id);drag={a,x:p.x,y:p.y,dx:a.dx,dy:a.dy};cv.setPointerCapture(e.pointerId);cv.style.cursor='grabbing';save();syncUI();draw();
 });
 cv.addEventListener('pointermove',e=>{if(!drag)return;const p=toCanvas(e);drag.a.dx=drag.dx+p.x-drag.x;drag.a.dy=drag.dy+p.y-drag.y;draw()});
 const endDrag=()=>{drag=null;cv.style.cursor='grab'};
 cv.addEventListener('pointerup',endDrag);cv.addEventListener('pointercancel',endDrag);
-$('resetBtn').addEventListener('click',()=>{adj={};syncUI();draw()});
-
+$('resetBtn').addEventListener('click',()=>{adj={};allAdj=defaultAdj();syncUI();draw()});
 function sheetText(){
   const L=(list,k)=>(list.find(x=>x[0]===k)||[k,k])[1];
   const d=new Date(),date=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
   const desc=p=>{let t=`底色 ${codeOf(p.color)} ${p.color} · ${L(FINISHES,p.finish)}`;if(p.pattern!=='none')t+=` · ${L(PATTERNS,p.pattern)}（${codeOf(p.pc)} ${p.pc}）`;if(p.decor!=='none')t+=` · ${L(DECORS,p.decor)}`;return t};
   const m=new Map();st.per.forEach((p,i)=>{const k=desc(p);m.set(k,[...(m.get(k)||[]),FNAMES[i]])});
-  let out=`美甲设计单 ${date}\n甲型：${L(SHAPES,st.shape)}，长度：${L(LENGTHS,st.len)}\n`;
+  let out=`美甲设计单 ${date}\n甲型：${L(SHAPES,st.shape)}，延长：${L(LENGTHS,st.len)}\n`;
   for(const [k,v] of m)out+=`${v.length===5?'十指':v.join('、')}：${k}\n`;
+  if(nails.some(n=>n.f<0))out+=`未匹配手指的 ${nails.filter(n=>n.f<0).length} 片指甲（全部设置）：${desc(st.rest)}\n`;
   return out.trim();
 }
 $('copyBtn').addEventListener('click',()=>{const t=$('sheetText'),b=$('copyBtn');const done=m=>{b.textContent=m;setTimeout(()=>b.textContent='复制设计单',1800)};
   try{navigator.clipboard.writeText(t.value).then(()=>done('已复制'),()=>{t.select();done('已选中，手动复制')})}catch(e){t.select();done('已选中，手动复制')}});
 $('snapBtn').addEventListener('click',()=>{
-  const was=st.scope;st.scope='all';draw();st.scope=was;   // no selection outline in the export
+  const show=st.showSeg;st.showSeg=false;draw(false);st.showSeg=show;
   $('shotImg').src=cv.toDataURL('image/jpeg',.92);$('sheetText').value=sheetText();$('shot').hidden=false;draw();
 });
 
 syncUI();
-(async()=>{try{hands=await loadHands();overlay('准备好了','点“拍照 / 选图”，拍一张手背。',false)}catch(e){overlay('识别模型没加载出来','检查网络后刷新再试。'+(e.message||''),false)}})();
+overlay('准备好了','点“拍照 / 选图”，选择指甲清楚的照片。照片只在本机处理。',false);
 </script>
 
 </body>
