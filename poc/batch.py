@@ -77,8 +77,33 @@ def main() -> int:
     ap.add_argument("--size", default="2K")
     ap.add_argument("--model", default=None)
     ap.add_argument("--out-root", type=Path, default=Path.home() / "nail-tryon-data" / "runs")
+    ap.add_argument("--index-only", type=Path, default=None,
+                    help="do not generate; rebuild index.html for this existing batch dir from its run dirs")
     ap.add_argument("extra", nargs="*", help="extra args for tryon.py, after `--`")
     a = ap.parse_args()
+
+    if a.index_only:
+        hands = sorted(p for p in a.hands.iterdir() if p.suffix.lower() in IMG)
+        refs = sorted(p for p in a.refs.iterdir() if p.suffix.lower() in IMG)
+        results = []
+        for run in sorted(p for p in a.index_only.iterdir() if p.is_dir() and (p / "input-hand.jpg").exists()):
+            mp = run / "meta.json"
+            meta = json.loads(mp.read_text()) if mp.exists() else {}
+            if meta:
+                hand, ref = Path(meta["hand"]["source"]).name, Path(meta["ref"]["source"]).name
+            else:  # crashed run: recover the pair from the directory name
+                hand = next((h.name for h in hands if f"-{h.stem}-" in run.name), "?")
+                ref = next((r.name for r in refs if run.name.endswith(f"-{r.stem}")), "?")
+                meta = {"candidates": [{"file": c.name} for c in sorted(run.glob("cand-*.jpg"))],
+                        "errors": ["run crashed before meta.json was written"], "estimated_cost_usd": 0}
+            # a later complete run of the same pair replaces an earlier partial one
+            results = [x for x in results if not (x["hand"] == hand and x["ref"] == ref and not x["meta"].get("model"))]
+            if any(x["hand"] == hand and x["ref"] == ref and x["meta"].get("model") for x in results) and not meta.get("model"):
+                continue
+            results.append({"hand": hand, "ref": ref, "run": run, "meta": meta, "rc": 0})
+        out = build_index(a.index_only, hands, refs, results)
+        print(f"grid: {out}")
+        return 0
 
     hands = sorted(p for p in a.hands.iterdir() if p.suffix.lower() in IMG)
     refs = sorted(p for p in a.refs.iterdir() if p.suffix.lower() in IMG)

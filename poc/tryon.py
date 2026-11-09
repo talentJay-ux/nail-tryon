@@ -176,7 +176,9 @@ def main() -> int:
             meta["usage"]["output_tokens"] += um.candidates_token_count or 0
         saved = False
         notes = []
-        for part in (resp.candidates[0].content.parts if resp.candidates else []):
+        cand0 = resp.candidates[0] if resp.candidates else None
+        parts = cand0.content.parts if (cand0 and cand0.content and cand0.content.parts) else []
+        for part in parts:
             if part.inline_data and part.inline_data.data:
                 ext = "png" if "png" in (part.inline_data.mime_type or "") else "jpg"
                 fn = f"cand-{i}.{ext}"
@@ -188,8 +190,12 @@ def main() -> int:
             elif part.text:
                 notes.append(part.text.strip())
         if not saved:
-            fr = getattr(resp.candidates[0], "finish_reason", None) if resp.candidates else None
-            msg = f"candidate {i}: no image returned (finish_reason={fr}; text={' '.join(notes)[:300]!r})"
+            # The model answered but sent no image: usually a safety / recitation / NO_IMAGE finish.
+            fr = getattr(cand0, "finish_reason", None)
+            fm = getattr(cand0, "finish_message", None)
+            pf = getattr(resp, "prompt_feedback", None)
+            msg = (f"candidate {i}: no image returned (finish_reason={fr}; finish_message={fm!r}; "
+                   f"prompt_feedback={pf}; text={' '.join(notes)[:300]!r})")
             print(msg, file=sys.stderr)
             meta["errors"].append(msg)
 
