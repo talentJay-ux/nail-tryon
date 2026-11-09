@@ -4,3 +4,5 @@ before.html
 model-build/
 __pycache__/
 *.pyc
+.venv/
+poc/__pycache__/
