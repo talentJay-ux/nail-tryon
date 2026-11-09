@@ -24,7 +24,7 @@ from PIL import Image
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import prompts  # noqa: E402
 
-MODEL = "gemini-3-pro-image-preview"
+MODEL = "gemini-3-pro-image"  # Nano Banana Pro, GA id (the -preview id is gone from v1)
 KEY_FILE = Path.home() / ".config" / "nail-tryon" / ".env"
 # Third-party quotes of the Gemini API price list (not verified on ai.google.dev):
 # ~$0.134 per 1K/2K output image, ~$0.24 per 4K image, $2 per 1M input tokens.
@@ -107,6 +107,7 @@ def main() -> int:
     ap.add_argument("--ref", required=True, type=Path)
     ap.add_argument("--n", type=int, default=3, help="candidates to generate (sequential calls)")
     ap.add_argument("--size", choices=["1K", "2K", "4K"], default="2K")
+    ap.add_argument("--model", default=MODEL, help="e.g. gemini-3-pro-image (Nano Banana Pro), gemini-nano-banana-2.1")
     ap.add_argument("--adopt-shape", action="store_true", help="take nail length/shape from the reference")
     ap.add_argument("--notes", default="", help="extra instructions appended to the prompt")
     ap.add_argument("--out-root", type=Path, default=Path.home() / "nail-tryon-data" / "runs")
@@ -129,7 +130,7 @@ def main() -> int:
     prompt = prompts.build(adopt_shape=a.adopt_shape, notes=a.notes)
 
     meta = {
-        "model": MODEL, "image_size": a.size, "aspect_ratio": aspect,
+        "model": a.model, "image_size": a.size, "aspect_ratio": aspect,
         "prompt_version": prompts.PROMPT_VERSION, "prompt": prompt,
         "adopt_shape": a.adopt_shape, "notes": a.notes,
         "hand": {"source": str(a.hand.resolve()), "sent_size": f"{hand_img.size[0]}x{hand_img.size[1]}"},
@@ -162,7 +163,7 @@ def main() -> int:
     for i in range(1, a.n + 1):
         t0 = time.time()
         try:
-            resp = client.models.generate_content(model=MODEL, contents=contents, config=config)
+            resp = client.models.generate_content(model=a.model, contents=contents, config=config)
         except Exception as e:  # fail loud, keep going so one bad call doesn't lose the run
             msg = f"candidate {i}: API error: {type(e).__name__}: {e}"
             print(msg, file=sys.stderr)
