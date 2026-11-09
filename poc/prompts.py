@@ -4,7 +4,7 @@ Every change to a prompt is a new VERSION entry so a run's meta.json can say
 exactly which wording produced which image.
 """
 
-PROMPT_VERSION = "v2.1"  # v2: design-spec block from extract.py; v2.1: base no longer asks for a visible free edge / translucency
+PROMPT_VERSION = "v2.2"  # v2.2: explicit opaque free-edge rule  # v2: design-spec block from extract.py; v2.1: base no longer asks for a visible free edge / translucency
 
 # Image order sent to the model: [hand photo, reference photo]; the prompt
 # refers to them as Image 1 / Image 2 in that order.
@@ -43,7 +43,10 @@ Design specification extracted from Image 2 (authoritative; where the photo is a
 """
 
 COVERAGE = {
-    "opaque": "Full, even coverage: the natural nail plate and the free edge must NOT show through; no translucent or whitish tip.",
+    "opaque": ("Full, even coverage like thick opaque enamel: the natural nail plate must not show through. "
+               "The FREE EDGE (the part of the nail that extends past the fingertip) must be painted in exactly the same "
+               "opaque colour and brightness as the rest of the nail: not lighter, not whiter, not translucent, not backlit; "
+               "no light passes through it and nothing is visible behind it."),
     "semi-sheer": "Slightly translucent body, but no distinct whitish free edge.",
     "sheer": "Translucent glaze through which the natural nail and tip show softly.",
 }
