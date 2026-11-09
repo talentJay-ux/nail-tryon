@@ -14,11 +14,14 @@ open ~/nail-tryon-data/runs/<run>/report.html
 - `--size 1K|2K|4K`（默认 2K）、`--adopt-shape`（甲型长度跟客图，默认保留顾客自己的）、`--notes "..."`（美甲师补充要求）、`--dry-run`（不调接口，只写提示词和报告，顺便估价）。
 - 每次运行在 `~/nail-tryon-data/runs/<时间戳-手照-客图>/` 下留下输入副本、候选图、`meta.json`（模型、尺寸、提示词版本、token 用量、估算费用、错误）和 `report.html`。
 - 测试图片放在仓库外的 `~/nail-tryon-data/`，客图来自公开文章，有版权，不进 git。
+- 批量对比：`python batch.py --n 3 --size 2K` 把 `hands/` × `refs/` 全部跑一遍，输出 `runs/batch-<时间戳>/index.html`，行是手照、列是客图、格子是候选，点图进该对的 report。可加 `--model gemini-nano-banana-2.1` 换便宜模型对照。
 
 ## 密钥
 
 读 `$GEMINI_API_KEY`，否则读 `~/.config/nail-tryon/.env` 里的 `GEMINI_API_KEY=...`。没有就直接报错退出，不会伪造输出。
-在 https://aistudio.google.com/apikey 创建，需绑定已开通计费的 Google Cloud 项目（Nano Banana Pro 只在付费档提供）。
+在 https://aistudio.google.com/apikey 创建，需绑定已开通计费的 Google Cloud 项目：免费档对 `gemini-3-pro-image` 的配额是 0，会报 429。
+一个计费账户默认只能挂 5 个项目，第 6 个会报 "Cloud billing quota exceeded"，要么解绑一个空项目，要么申请提额。
+模型正式 id 是 `gemini-3-pro-image`（Nano Banana Pro）；`gemini-3-pro-image-preview` 在 v1 下已 404。
 
 ## 价格
 
