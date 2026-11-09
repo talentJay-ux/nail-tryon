@@ -110,6 +110,7 @@ def main() -> int:
     ap.add_argument("--model", default=MODEL, help="e.g. gemini-3-pro-image (Nano Banana Pro), gemini-nano-banana-2.1")
     ap.add_argument("--adopt-shape", action="store_true", help="take nail length/shape from the reference")
     ap.add_argument("--notes", default="", help="extra instructions appended to the prompt")
+    ap.add_argument("--spec", type=Path, default=None, help="design spec JSON from extract.py, injected into the prompt")
     ap.add_argument("--out-root", type=Path, default=Path.home() / "nail-tryon-data" / "runs")
     ap.add_argument("--dry-run", action="store_true", help="validate inputs, write prompt + report, no API call")
     a = ap.parse_args()
@@ -127,12 +128,13 @@ def main() -> int:
     (run / "input-hand.jpg").write_bytes(hand_bytes)
     (run / "input-ref.jpg").write_bytes(ref_bytes)
     aspect = nearest_aspect(*hand_img.size)
-    prompt = prompts.build(adopt_shape=a.adopt_shape, notes=a.notes)
+    spec = json.loads(a.spec.read_text()) if a.spec else None
+    prompt = prompts.build(adopt_shape=a.adopt_shape, notes=a.notes, spec=spec)
 
     meta = {
         "model": a.model, "image_size": a.size, "aspect_ratio": aspect,
         "prompt_version": prompts.PROMPT_VERSION, "prompt": prompt,
-        "adopt_shape": a.adopt_shape, "notes": a.notes,
+        "adopt_shape": a.adopt_shape, "notes": a.notes, "spec": spec,
         "hand": {"source": str(a.hand.resolve()), "sent_size": f"{hand_img.size[0]}x{hand_img.size[1]}"},
         "ref": {"source": str(a.ref.resolve()), "sent_size": f"{ref_img.size[0]}x{ref_img.size[1]}"},
         "requested": a.n, "candidates": [], "usage": {"input_tokens": 0, "output_tokens": 0},
