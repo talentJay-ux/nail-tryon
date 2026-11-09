@@ -1,7 +1,7 @@
 # PoC · 客图上手（Nano Banana Pro）
 
 目标：顾客手照 + 一张客图（小红书等来源的款式照）→ 几张把该款式真实渲染到顾客手上的候选图。
-这是第 1 片：直接两图输入、多候选出图、生成对比报告。逐指提取、合成守门等按验证结果再加。
+这是第 1 片：直接两图输入、多候选出图、生成对比报告。逐指提取、合成守门等按验证结果再加。背景、调研、需求、实测与下一步见 [NOTES.md](NOTES.md)。
 
 ## 运行
 
@@ -13,6 +13,7 @@ open ~/nail-tryon-data/runs/<run>/report.html
 
 - `--size 1K|2K|4K`（默认 2K）、`--adopt-shape`（甲型长度跟客图，默认保留顾客自己的）、`--notes "..."`（美甲师补充要求）、`--dry-run`（不调接口，只写提示词和报告，顺便估价）。
 - 每次运行在 `~/nail-tryon-data/runs/<时间戳-手照-客图>/` 下留下输入副本、候选图、`meta.json`（模型、尺寸、提示词版本、token 用量、估算费用、错误）和 `report.html`。
+- 微信分享图：`python export_wechat.py --out DIR "A 保留原甲型=<run>" "B 长款延长=<run>"` 出 9 张单图 + 1 张长图。
 - 测试图片放在仓库外的 `~/nail-tryon-data/`，客图来自公开文章，有版权，不进 git。
 - 批量对比：`python batch.py --n 3 --size 2K` 把 `hands/` × `refs/` 全部跑一遍，输出 `runs/batch-<时间戳>/index.html`，行是手照、列是客图、格子是候选，点图进该对的 report。可加 `--model gemini-nano-banana-2.1` 换便宜模型对照。
 
